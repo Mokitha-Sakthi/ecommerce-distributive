@@ -3,7 +3,7 @@ from app.state import state
 from app.config import NODE_ID, PEERS, logger
 from app.election import receive_election, receive_leader_announce
 from app.replication import replicate_order
-from app.aurora_db import save_order
+from app.aurora_db import save_order, get_inventory, update_inventory
 import requests
 import time
 
@@ -30,10 +30,10 @@ async def place_order(order: dict):
     
     state.locks[product_id] = NODE_ID
     try:
-        # 2. Check Inventory
-        available_qty = state.inventory.get(product_id, 0)
+        # 2. Check Inventory (Fetch from DB)
+        available_qty = get_inventory(product_id)
         if available_qty < requested_qty:
-            return {"status": "error", "message": f"Insufficient stock for {product_id}."}
+            return {"status": "error", "message": f"Insufficient stock for {product_id} (DB: {available_qty})."}
 
         # 3. Replicate
         success = replicate_order(order)
@@ -104,19 +104,21 @@ async def prepare_replication(order: dict):
 
 @app.post("/commit_order")
 async def commit_order(data: dict):
-    """Phase 2 (Commit): Write the pending order to MySQL."""
+    """Phase 2 (Commit): Write the pending order and update inventory in MySQL."""
     order_id = data.get("order_id")
     order = state.pending_orders.pop(order_id, None)
     if order:
         product_id = order.get("item", "item1")
         requested_qty = order.get("quantity", 1)
-        # Decrement inventory by requested quantity
-        if product_id in state.inventory:
-            state.inventory[product_id] -= requested_qty
         
+        # 1. Update Inventory Table in MySQL
+        db_success = update_inventory(product_id, requested_qty)
+        
+        # 2. Save Order to MySQL
         save_order(order)
+        
         state.order_buffer.append(order)
-        logger.info(f"[COMMIT] Order {order_id} committed. Stock: {state.inventory.get(product_id)}")
+        logger.info(f"[COMMIT] Order {order_id} committed. DB Update: {db_success}")
     else:
         logger.warning(f"[COMMIT] Order {order_id} not found.")
     return {"status": "ack"}

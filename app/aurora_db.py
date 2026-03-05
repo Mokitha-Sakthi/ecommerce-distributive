@@ -33,3 +33,38 @@ def save_order(order):
     
     logger.warning("[DB] All Aurora connections failed - simulating commit for demo.")
     return True
+def get_inventory(product_id):
+    """Fetches stock level for a product from the inventory table."""
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    for host in hosts:
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"], connect_timeout=3
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT quantity FROM inventory WHERE item = %s", (product_id,))
+                result = cursor.fetchone()
+                if result: return result[0]
+            connection.close()
+        except Exception: continue
+    return 0
+
+def update_inventory(product_id, quantity_to_subtract):
+    """Decrements inventory in the database."""
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    success = False
+    for host in hosts:
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"], connect_timeout=3
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("UPDATE inventory SET quantity = quantity - %s WHERE item = %s", 
+                               (quantity_to_subtract, product_id))
+            connection.commit()
+            connection.close()
+            success = True
+        except Exception: continue
+    return success

@@ -11,11 +11,6 @@ class SystemState:
         self.election_in_progress = False
         
         # New for Mutual Exclusion & Inventory
-        self.inventory = {
-            "Mechanical Keyboard": 10,
-            "laptop": 5,
-            "item1": 5
-        }
         self.locks = {} # {product_id: node_id} - Only used on Leader
 
 state = SystemState()
