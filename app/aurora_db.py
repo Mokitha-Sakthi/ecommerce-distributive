@@ -70,10 +70,15 @@ def update_inventory(product_id, quantity_to_subtract):
                 database=DB_CONFIG["database"], connect_timeout=3
             )
             with connection.cursor() as cursor:
-                cursor.execute("UPDATE inventory SET quantity = quantity - %s WHERE item = %s", 
-                               (quantity_to_subtract, product_id))
+                affected = cursor.execute(
+                    "UPDATE inventory SET quantity = quantity - %s WHERE item = %s AND quantity >= %s", 
+                    (quantity_to_subtract, product_id, quantity_to_subtract)
+                )
+                if affected == 0:
+                    logger.warning(f"[DB] Update rejected on {host}: Insufficient stock (would go negative).")
+                else:
+                    success = True
             connection.commit()
-            success = True
         except Exception as e:
             logger.error(f"[DB] Update failed on {host}: {e}")
             continue
