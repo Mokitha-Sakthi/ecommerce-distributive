@@ -3,7 +3,10 @@ from app.state import state
 from app.config import NODE_ID, PEERS, logger
 from app.election import receive_election, receive_leader_announce
 from app.replication import replicate_order
-from app.aurora_db import save_order, get_inventory, update_inventory, initialize_inventory, get_all_data, overwrite_local_data
+from app.aurora_db import (
+    save_order, get_inventory, update_inventory, initialize_inventory, 
+    get_all_data, overwrite_local_data, get_db_summary
+)
 from app.snapshot import initiate_snapshot, receive_marker
 import requests
 import time
@@ -194,6 +197,14 @@ async def get_all_data_endpoint():
         return {"status": "error", "message": "Only leader provides sync data."}
     data = get_all_data()
     return {"status": "success", "data": data}
+
+@app.get("/get_sync_summary")
+async def get_sync_summary_endpoint():
+    """Returns a summary of DB state (order count, inventory) for comparison."""
+    if not state.is_leader:
+        return {"status": "error", "message": "Only leader provides sync summary."}
+    summary = get_db_summary()
+    return {"status": "success", "summary": summary}
 
 @app.get("/status")
 async def get_status():

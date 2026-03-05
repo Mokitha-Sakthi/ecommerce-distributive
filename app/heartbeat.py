@@ -35,6 +35,7 @@ def monitor_leader():
         # Better Candidate / Join Reconciliation Trigger
         if not state.is_leader and state.leader_id is not None:
             if not state.synced_once:
+                # Trigger sync check as soon as a leader is found
                 should_take_over = (NODE_ID > state.leader_id)
                 threading.Thread(target=sync_with_leader, args=(state.leader_id, should_take_over), daemon=True).start()
                 state.synced_once = True
@@ -45,28 +46,44 @@ def monitor_leader():
         time.sleep(2)
 
 def sync_with_leader(leader_id, elect_after=False):
-    """Fetches full state from leader and updates local DB."""
-    from app.aurora_db import overwrite_local_data
+    """Fetches full state from leader and updates local DB if different."""
+    from app.aurora_db import overwrite_local_data, get_db_summary
     leader_url = PEERS.get(leader_id)
     if not leader_url: return
     
-    logger.info(f"[SYNC] Attempting to sync data from Leader {leader_id} at {leader_url}")
     try:
-        response = requests.get(f"{leader_url}/get_all_data", timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("status") == "success" and result.get("data"):
-                logger.info(f"[SYNC] Data received. Overwriting local tables...")
-                overwrite_local_data(result["data"])
-                logger.info("[SYNC] Local database is now in sync with leader.")
-                
+        # Step 1: Check Metadata first
+        logger.info(f"[SYNC] Checking state consistency with Leader {leader_id}...")
+        resp = requests.get(f"{leader_url}/get_sync_summary", timeout=5)
+        if resp.status_code == 200:
+            leader_summary = resp.json().get("summary")
+            local_summary = get_db_summary()
+            
+            if leader_summary == local_summary:
+                logger.info("[SYNC] Local database is already in sync with leader. No data pull needed.")
                 if elect_after:
-                    logger.info(f"[SYNC] Catch-up complete. Starting election to take over leadership.")
+                    from app.election import start_election
                     start_election()
+                return
+                
+            # Step 2: Fetch full data only if summary differs
+            logger.info(f"[SYNC] Discrepancy detected (Leader: {leader_summary}, Local: {local_summary}). Pulling full data...")
+            response = requests.get(f"{leader_url}/get_all_data", timeout=10)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") == "success" and result.get("data"):
+                    logger.info(f"[SYNC] Overwriting local tables with leader data...")
+                    overwrite_local_data(result["data"])
+                    logger.info("[SYNC] Local database is now in sync.")
+                    if elect_after:
+                        from app.election import start_election
+                        start_election()
+                else:
+                    logger.warning(f"[SYNC] Invalid response from leader.")
             else:
-                logger.warning(f"[SYNC] Invalid response from leader.")
+                logger.warning(f"[SYNC] Leader returned {response.status_code}")
         else:
-            logger.warning(f"[SYNC] Leader returned {response.status_code}")
+            logger.warning(f"[SYNC] Could not fetch summary from leader.")
     except Exception as e:
         logger.error(f"[SYNC] Sync failed: {e}")
         state.synced_once = False # Retry later

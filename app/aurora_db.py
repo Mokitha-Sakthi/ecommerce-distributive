@@ -137,6 +137,31 @@ def get_all_data():
             if 'connection' in locals() and connection: connection.close()
     return None
 
+def get_db_summary():
+    """Returns a summary of the database: order count and inventory state."""
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    for host in hosts:
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"]
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM orders")
+                order_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT item, quantity FROM inventory ORDER BY item")
+                inventory = cursor.fetchall()
+                # Create a simple hashable representation of inventory
+                inv_summary = {item: qty for item, qty in inventory}
+                
+                return {"order_count": order_count, "inventory": inv_summary}
+        except Exception:
+            continue
+        finally:
+            if 'connection' in locals() and connection: connection.close()
+    return None
+
 def overwrite_local_data(data):
     """Overwrites local tables with data provided by the leader."""
     hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
