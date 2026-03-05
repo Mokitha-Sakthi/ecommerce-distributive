@@ -12,5 +12,10 @@ class SystemState:
         
         # New for Mutual Exclusion & Inventory
         self.locks = {} # {product_id: node_id} - Only used on Leader
+        
+        # Chandy-Lamport Snapshot
+        self.snapshot_data = {}       # Last global snapshot (leader only)
+        self.snapshot_in_progress = False
+        self.last_snapshot = {}       # Last local snapshot (followers)
 
 state = SystemState()

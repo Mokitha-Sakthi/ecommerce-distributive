@@ -4,6 +4,7 @@ from app.config import NODE_ID, PEERS, logger
 from app.election import receive_election, receive_leader_announce
 from app.replication import replicate_order
 from app.aurora_db import save_order, get_inventory, update_inventory, initialize_inventory
+from app.snapshot import initiate_snapshot, receive_marker
 import requests
 import time
 
@@ -150,6 +151,35 @@ async def abort_order(data: dict):
         logger.warning(f"[ABORT] Order {order_id} not found in pending_orders (already discarded?).")
     return {"status": "ack"}
 
+
+# ---- Chandy-Lamport Snapshot Endpoints ----
+
+@app.post("/initiate_snapshot")
+async def initiate_snapshot_endpoint():
+    """Leader initiates a global snapshot."""
+    if not state.is_leader:
+        return {"status": "error", "message": "Only leader can initiate snapshot."}
+    result = initiate_snapshot()
+    if result:
+        return {"status": "success", "snapshot": result}
+    return {"status": "error", "message": "Snapshot failed."}
+
+@app.post("/receive_marker")
+async def receive_marker_endpoint(data: dict):
+    """Follower receives a marker, records and returns local state."""
+    snapshot_id = data.get("snapshot_id")
+    sender_id = data.get("sender_id")
+    local_state = receive_marker(snapshot_id, sender_id)
+    return {"status": "ack", "local_state": local_state}
+
+@app.get("/snapshot")
+async def get_snapshot():
+    """View the latest global snapshot (leader) or local snapshot (follower)."""
+    if state.is_leader and state.snapshot_data:
+        return {"role": "leader", "global_snapshot": state.snapshot_data}
+    elif state.last_snapshot:
+        return {"role": "follower", "local_snapshot": state.last_snapshot}
+    return {"message": "No snapshot available yet."}
 
 @app.get("/status")
 async def get_status():
