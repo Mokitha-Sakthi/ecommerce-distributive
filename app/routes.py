@@ -38,7 +38,7 @@ async def place_order(order: dict):
         # 2. Check Inventory (Fetch from DB)
         available_qty, db_status = get_inventory(product_id)
         if db_status != "OK":
-            return {"status": "error", "message": f"Inventory check failed."}
+            return {"status": "error", "message": f"Inventory check failed: {db_status}"}
             
         if available_qty < requested_qty:
             return {"status": "error", "message": f"Insufficient stock for {product_id}."}

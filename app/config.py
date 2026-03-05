@@ -29,7 +29,7 @@ for i in range(1, 5):
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
+    "password": os.getenv("DB_PASSWORD", "Preethi38"),
     "database": os.getenv("DB_NAME", "ecommerce"),
 } 
 

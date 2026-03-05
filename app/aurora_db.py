@@ -34,8 +34,9 @@ def save_order(order):
     logger.warning("[DB] All Aurora connections failed - simulating commit for demo.")
     return True
 def get_inventory(product_id):
-    """Fetches stock level for a product. Returns (quantity, status)."""
+    """Fetches stock level. Returns (quantity, status)."""
     hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    connected_at_least_once = False
     for host in hosts:
         connection = None
         try:
@@ -43,16 +44,19 @@ def get_inventory(product_id):
                 host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
                 database=DB_CONFIG["database"], connect_timeout=3
             )
+            connected_at_least_once = True
             with connection.cursor() as cursor:
                 cursor.execute("SELECT quantity FROM inventory WHERE item = %s", (product_id.strip(),))
                 result = cursor.fetchone()
                 if result is not None:
                     return result[0], "OK"
+                else:
+                    return 0, f"Item '{product_id}' not in DB"
         except Exception:
             continue
         finally:
             if connection: connection.close()
-    return 0, "Error connecting to DB"
+    return 0, "DB connection failed" if not connected_at_least_once else "Item not found"
 
 def update_inventory(product_id, quantity_to_subtract):
     """Decrements inventory in the database. Returns True if at least one host succeeded."""

@@ -1,7 +1,7 @@
 import requests
 from app.config import PEERS, logger
 from app.state import state
-from app.aurora_db import save_order
+from app.aurora_db import save_order, update_inventory
 
 def replicate_order(order):
     """Two-phase quorum-based replication logic (Leader only)."""
@@ -36,6 +36,13 @@ def replicate_order(order):
         logger.info(f"[REPLICATION] Quorum reached ({ack_count}/{total_nodes}). Phase 2 (COMMIT).")
 
         # Commit on leader first
+        product_id = order.get("item", "item1").strip()
+        requested_qty = order.get("quantity", 1)
+        
+        # 1. Update Inventory locally on Leader
+        update_inventory(product_id, requested_qty)
+        
+        # 2. Save Order locally on Leader
         if save_order(order):
             logger.info(f"[REPLICATION] Order {order_id} committed on leader.")
         else:
