@@ -6,7 +6,16 @@ class SystemState:
         self.is_leader = False
         self.last_heartbeat = time.time()
         self.order_buffer = []
+        self.pending_orders = {}  # {order_id: order} - buffered during prepare phase
         self.nodes_alive = {} # {id: last_seen_time}
         self.election_in_progress = False
+        
+        # New for Mutual Exclusion & Inventory
+        self.inventory = {
+            "Mechanical Keyboard": 10,
+            "laptop": 5,
+            "item1": 5
+        }
+        self.locks = {} # {product_id: node_id} - Only used on Leader
 
 state = SystemState()

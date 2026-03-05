@@ -39,6 +39,7 @@ def announce_leadership():
     state.leader_id = NODE_ID
     state.is_leader = True
     state.election_in_progress = False
+    state.locks = {} # Clear locks when becoming new leader
     logger.info(f"[ELECTION] Node {NODE_ID} is now the leader.")
     
     # Broadcast leadership to all peers
@@ -60,4 +61,5 @@ def receive_leader_announce(leader_id):
     state.leader_id = leader_id
     state.is_leader = (leader_id == NODE_ID)
     state.election_in_progress = False
+    state.locks = {} # Reset local view of locks
     state.last_heartbeat = __import__('time').time() # Reset heartbeat timeout
