@@ -64,6 +64,7 @@ def replicate_order(order):
         return True
     else:
         logger.error(f"[REPLICATION] Quorum NOT reached ({ack_count}/{total_nodes}). Phase 2 (ABORT).")
+        logger.error(f"[SYSTEM-FREEZE] To prevent split-brain data corruption (simulating Amazon Aurora), the system is aborting this transaction because a strict majority of nodes are offline.")
         _send_abort(order_id)
         return False
 
