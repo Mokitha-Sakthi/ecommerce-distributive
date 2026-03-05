@@ -79,14 +79,18 @@ def sync_with_leader(leader_id, elect_after=False):
                         from app.election import start_election
                         start_election()
                 else:
-                    logger.warning(f"[SYNC] Invalid response from leader.")
+                    logger.warning(f"[SYNC] Invalid response from leader /get_all_data.")
             else:
-                logger.warning(f"[SYNC] Leader returned {response.status_code}")
+                logger.warning(f"[SYNC] Leader /get_all_data returned {response.status_code}")
+        elif resp.status_code == 404:
+            logger.warning(f"[SYNC] Leader {leader_id} does not support synchronization (possible version mismatch). Skipping.")
         else:
-            logger.warning(f"[SYNC] Could not fetch summary from leader.")
+            logger.warning(f"[SYNC] Leader returned {resp.status_code}")
     except Exception as e:
         logger.error(f"[SYNC] Sync failed: {e}")
-        state.synced_once = False # Retry later
+        # Add a delay before allow next sync attempt to prevent spamming
+        __import__('time').sleep(5)
+        state.synced_once = False 
 
 def start_heartbeat_threads():
     threading.Thread(target=send_heartbeat, daemon=True).start()
