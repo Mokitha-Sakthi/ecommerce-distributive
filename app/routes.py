@@ -31,19 +31,24 @@ async def place_order(order: dict):
 
     # 1. Acquire Lock (Centralized on leader)
     if product_id in state.locks:
+        logger.info(f"[LOCK] Order for '{product_id}' denied - Lock already held by Node {state.locks[product_id]}.")
         return {"status": "error", "message": f"Lock for {product_id} busy."}
     
     state.locks[product_id] = NODE_ID
+    logger.info(f"[LOCK] Node {NODE_ID} acquired lock for '{product_id}'.")
     try:
         # 2. Check Inventory (Fetch from DB)
         available_qty, db_status = get_inventory(product_id)
         if db_status != "OK":
+            logger.error(f"[ORDER] Inventory check failed for '{product_id}': {db_status}")
             return {"status": "error", "message": f"Inventory check failed: {db_status}"}
             
         if available_qty < requested_qty:
+            logger.info(f"[ORDER] Rejected: Insufficient stock for '{product_id}' (Requested: {requested_qty}, Available: {available_qty}).")
             return {"status": "error", "message": f"Insufficient stock for {product_id}."}
 
         # 3. Replicate
+        logger.info(f"[ORDER] Inventory check passed. Starting replication for '{product_id}'...")
         success = replicate_order(order)
         if success:
             return {"status": "success", "order_id": order.get("id"), "handled_by": NODE_ID}
@@ -51,6 +56,7 @@ async def place_order(order: dict):
     finally:
         # 4. Release Lock
         state.locks.pop(product_id, None)
+        logger.info(f"[LOCK] Node {NODE_ID} released lock for '{product_id}'.")
 
 @app.post("/heartbeat")
 async def heartbeat(data: dict):
@@ -120,13 +126,15 @@ async def commit_order(data: dict):
         requested_qty = order.get("quantity", 1)
         
         # 1. Update Inventory Table in MySQL
+        logger.info(f"[DB] Follower updating inventory for '{product_id}' (-{requested_qty})...")
         db_success = update_inventory(product_id, requested_qty)
         
         # 2. Save Order to MySQL
+        logger.info(f"[DB] Follower saving order details for {order_id}...")
         save_order(order)
         
         state.order_buffer.append(order)
-        logger.info(f"[COMMIT] Order {order_id} committed. DB Update: {db_success}")
+        logger.info(f"[COMMIT] Order {order_id} logic completed. DB Success: {db_success}")
     else:
         logger.warning(f"[COMMIT] Order {order_id} not found.")
     return {"status": "ack"}

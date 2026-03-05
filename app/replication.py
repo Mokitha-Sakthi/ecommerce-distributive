@@ -40,9 +40,11 @@ def replicate_order(order):
         requested_qty = order.get("quantity", 1)
         
         # 1. Update Inventory locally on Leader
+        logger.info(f"[DB] Leader updating inventory for '{product_id}' (-{requested_qty})...")
         update_inventory(product_id, requested_qty)
         
         # 2. Save Order locally on Leader
+        logger.info(f"[DB] Leader saving order details for {order_id}...")
         if save_order(order):
             logger.info(f"[REPLICATION] Order {order_id} committed on leader.")
         else:
