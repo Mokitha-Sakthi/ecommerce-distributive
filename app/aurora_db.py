@@ -112,3 +112,67 @@ def initialize_inventory():
         finally:
             if connection: connection.close()
     return overall_success
+
+def get_all_data():
+    """Fetches all rows from inventory and orders for synchronization."""
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    if not hosts: return None
+    
+    for host in hosts:
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"]
+            )
+            with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute("SELECT * FROM inventory")
+                inventory = cursor.fetchall()
+                cursor.execute("SELECT * FROM orders")
+                orders = cursor.fetchall()
+                return {"inventory": inventory, "orders": orders}
+        except Exception as e:
+            logger.warning(f"[DB] Could not fetch sync data from {host}: {e}")
+            continue
+        finally:
+            if 'connection' in locals() and connection: connection.close()
+    return None
+
+def overwrite_local_data(data):
+    """Overwrites local tables with data provided by the leader."""
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    total_success = True
+    
+    for host in hosts:
+        connection = None
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"]
+            )
+            with connection.cursor() as cursor:
+                # 1. Clear tables
+                cursor.execute("DELETE FROM orders")
+                cursor.execute("DELETE FROM inventory")
+                
+                # 2. Insert Inventory
+                if data.get("inventory"):
+                    cursor.executemany(
+                        "INSERT INTO inventory (item, quantity) VALUES (%s, %s)",
+                        [(i['item'], i['quantity']) for i in data['inventory']]
+                    )
+                
+                # 3. Insert Orders
+                if data.get("orders"):
+                    cursor.executemany(
+                        "INSERT INTO orders (id, item, quantity, status) VALUES (%s, %s, %s, %s)",
+                        [(o['id'], o['item'], o['quantity'], o['status']) for o in data['orders']]
+                    )
+            connection.commit()
+            logger.info(f"[DB] Local tables overwritten with synced data on {host}")
+        except Exception as e:
+            logger.error(f"[DB] Failed to overwrite data on {host}: {e}")
+            total_success = False
+        finally:
+            if connection: connection.close()
+            
+    return total_success

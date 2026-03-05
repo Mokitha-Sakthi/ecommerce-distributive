@@ -3,7 +3,7 @@ from app.state import state
 from app.config import NODE_ID, PEERS, logger
 from app.election import receive_election, receive_leader_announce
 from app.replication import replicate_order
-from app.aurora_db import save_order, get_inventory, update_inventory, initialize_inventory
+from app.aurora_db import save_order, get_inventory, update_inventory, initialize_inventory, get_all_data, overwrite_local_data
 from app.snapshot import initiate_snapshot, receive_marker
 import requests
 import time
@@ -25,9 +25,15 @@ async def place_order(order: dict):
 
     if not state.is_leader:
         leader_url = PEERS.get(state.leader_id)
+        if not leader_url:
+            logger.error(f"[PROXY] Leader ID {state.leader_id} found but its URL is missing in PEERS.")
+            return {"status": "error", "message": f"Leader URL not found for ID {state.leader_id}"}
+            
         try:
+            logger.info(f"[PROXY] Forwarding order to Leader {state.leader_id} at {leader_url}")
             return requests.post(f"{leader_url}/place_order", json=order, timeout=5).json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"[PROXY] Connection to Leader {state.leader_id} at {leader_url} failed: {e}")
             return {"status": "error", "message": "Leader node is unreachable."}
 
     # 1. Acquire Lock (Centralized on leader)
@@ -180,6 +186,14 @@ async def get_snapshot():
     elif state.last_snapshot:
         return {"role": "follower", "local_snapshot": state.last_snapshot}
     return {"message": "No snapshot available yet."}
+
+@app.get("/get_all_data")
+async def get_all_data_endpoint():
+    """Returns all DB data for syncing followers."""
+    if not state.is_leader:
+        return {"status": "error", "message": "Only leader provides sync data."}
+    data = get_all_data()
+    return {"status": "success", "data": data}
 
 @app.get("/status")
 async def get_status():
