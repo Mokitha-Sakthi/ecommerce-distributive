@@ -31,7 +31,7 @@ DB_CONFIG = {
     "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", ""),
     "database": os.getenv("DB_NAME", "ecommerce"),
-}
+} 
 
 logger.debug(f"[CONFIG] NODE_ID: {NODE_ID}, PORT: {PORT}")
 logger.debug(f"[CONFIG] PEERS: {PEERS}")

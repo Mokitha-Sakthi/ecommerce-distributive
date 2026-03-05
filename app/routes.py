@@ -3,11 +3,16 @@ from app.state import state
 from app.config import NODE_ID, PEERS, logger
 from app.election import receive_election, receive_leader_announce
 from app.replication import replicate_order
-from app.aurora_db import save_order, get_inventory, update_inventory
+from app.aurora_db import save_order, get_inventory, update_inventory, initialize_inventory
 import requests
 import time
 
 app = FastAPI(title=f"Node {NODE_ID} API")
+
+@app.post("/initialize_inventory")
+async def init_inventory_endpoint():
+    initialize_inventory()
+    return {"status": "success", "message": "Inventory reset with code-based values."}
 
 @app.post("/place_order")
 async def place_order(order: dict):
@@ -31,9 +36,12 @@ async def place_order(order: dict):
     state.locks[product_id] = NODE_ID
     try:
         # 2. Check Inventory (Fetch from DB)
-        available_qty = get_inventory(product_id)
+        available_qty, db_status = get_inventory(product_id)
+        if db_status != "OK":
+            return {"status": "error", "message": f"Inventory check failed."}
+            
         if available_qty < requested_qty:
-            return {"status": "error", "message": f"Insufficient stock for {product_id} (DB: {available_qty})."}
+            return {"status": "error", "message": f"Insufficient stock for {product_id}."}
 
         # 3. Replicate
         success = replicate_order(order)

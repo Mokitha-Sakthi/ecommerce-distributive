@@ -34,27 +34,32 @@ def save_order(order):
     logger.warning("[DB] All Aurora connections failed - simulating commit for demo.")
     return True
 def get_inventory(product_id):
-    """Fetches stock level for a product from the inventory table."""
+    """Fetches stock level for a product. Returns (quantity, status)."""
     hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
     for host in hosts:
+        connection = None
         try:
             connection = pymysql.connect(
                 host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
                 database=DB_CONFIG["database"], connect_timeout=3
             )
             with connection.cursor() as cursor:
-                cursor.execute("SELECT quantity FROM inventory WHERE item = %s", (product_id,))
+                cursor.execute("SELECT quantity FROM inventory WHERE item = %s", (product_id.strip(),))
                 result = cursor.fetchone()
-                if result: return result[0]
-            connection.close()
-        except Exception: continue
-    return 0
+                if result is not None:
+                    return result[0], "OK"
+        except Exception:
+            continue
+        finally:
+            if connection: connection.close()
+    return 0, "Error connecting to DB"
 
 def update_inventory(product_id, quantity_to_subtract):
-    """Decrements inventory in the database."""
+    """Decrements inventory in the database. Returns True if at least one host succeeded."""
     hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
     success = False
     for host in hosts:
+        connection = None
         try:
             connection = pymysql.connect(
                 host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
@@ -64,7 +69,37 @@ def update_inventory(product_id, quantity_to_subtract):
                 cursor.execute("UPDATE inventory SET quantity = quantity - %s WHERE item = %s", 
                                (quantity_to_subtract, product_id))
             connection.commit()
-            connection.close()
             success = True
-        except Exception: continue
+        except Exception as e:
+            logger.error(f"[DB] Update failed on {host}: {e}")
+            continue
+        finally:
+            if connection: connection.close()
     return success
+
+def initialize_inventory():
+    """Clears and re-populates the inventory table from code."""
+    default_items = [
+        ('item1', 5), ('item2', 0), ('laptop', 5), ('Mechanical Keyboard', 10)
+    ]
+    hosts = [h.strip() for h in DB_CONFIG["host"].split(",")]
+    overall_success = False
+    for host in hosts:
+        connection = None
+        try:
+            connection = pymysql.connect(
+                host=host, user=DB_CONFIG["user"], password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"], connect_timeout=3
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM inventory")
+                cursor.executemany("INSERT INTO inventory (item, quantity) VALUES (%s, %s)", default_items)
+            connection.commit()
+            logger.info(f"[DB] Inventory re-initialized on {host}")
+            overall_success = True
+        except Exception as e:
+            logger.error(f"[DB] Re-init failed on {host}: {e}")
+            continue
+        finally:
+            if connection: connection.close()
+    return overall_success
