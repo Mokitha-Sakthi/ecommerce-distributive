@@ -17,5 +17,8 @@ class SystemState:
         self.snapshot_data = {}       # Last global snapshot (leader only)
         self.snapshot_in_progress = False
         self.last_snapshot = {}       # Last local snapshot (followers)
+        
+        # Node Join Reconciliation
+        self.synced_once = False
 
 state = SystemState()
