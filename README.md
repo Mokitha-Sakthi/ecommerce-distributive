@@ -1,13 +1,13 @@
 # Distributed E-Commerce Order Processing System
 
-A 4-node distributed system demonstrating Bully Leader Election, Heartbeat Failure Detection, and Quorum-based Replication.
+A 4-node distributed system demonstrating Bully Leader Election, Heartbeat Failure Detection, and Quorum-based Replication. This is a case study to understand the distributed implementation of Amazon Aurora
 
 ## Architecture
 - **Language**: Python (FastAPI)
 - **Nodes**: 4 Laptops (or 4 local instances for testing)
 - **Election**: Bully Algorithm
 - **Replication**: Quorum (N/2 + 1)
-- **Database**: Amazon Aurora (Leader-only commits)
+- **Database**: MySQL - to replicate Amazon Aurora (Leader-only commits)
 
 ## Setup
 1. Install dependencies:
